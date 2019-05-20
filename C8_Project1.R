@@ -54,24 +54,24 @@ if (!file.exists(file.name)) {
 
 # Load in the training data
 train.data.raw <- read.csv(file.name)
-rm(file.name)
+#rm(file.name)
 
 # The team that produced the data wrote a paper on their project, and the paper
 # contains valuable details on the variables. The variables will be checked more
 # closely to understand the references in the paper.
-#names.all <- names(train.data)  # 160
-#names.belt <- grep("belt", names.all, value = TRUE)  # 38
-#names.left1 <- grep("belt", names.all, value = TRUE, invert = TRUE)  # 122
-#names.forearm <- grep("forearm", names.left1, value = TRUE)  # 38
-#names.left2 <- grep("forearm", names.left1, value = TRUE, invert = TRUE)  # 84
-#names.arm <- grep("arm", names.left2, value = TRUE)  # 38
-#names.left3 <- grep("arm", names.left2, value = TRUE, invert = TRUE)  # 46
-#names.db <- grep("dumbbell", names.left3, value = TRUE)  # 38
-#names.left4 <- grep("dumbbell", names.left3, value = TRUE, invert = TRUE)  # 8
+#names(train.data)  # 160
+#grep("belt", names.all, value = TRUE)  # 38
+#grep("belt", names.all, value = TRUE, invert = TRUE)  # 122
+#grep("forearm", names.left1, value = TRUE)  # 38
+#grep("forearm", names.left1, value = TRUE, invert = TRUE)  # 84
+#grep("arm", names.left2, value = TRUE)  # 38
+#grep("arm", names.left2, value = TRUE, invert = TRUE)  # 46
+#grep("dumbbell", names.left3, value = TRUE)  # 38
+#grep("dumbbell", names.left3, value = TRUE, invert = TRUE)  # 8
 # Each sensor location has 38 variables, the eight remaining are not predictors
 # What are the 38 variables for each sensor?
 # Euler angles: roll, pitch, and yaw
-#test <- grep("avg", names.belt, value = TRUE, invert = TRUE) %>%
+#grep("avg", names.belt, value = TRUE, invert = TRUE) %>%
 #  # Variance: roll, pitch, and yaw
 #  grep("stddev", ., value = TRUE, invert = TRUE) %>%
 #  grep("max", ., value = TRUE, invert = TRUE) %>%
@@ -86,7 +86,6 @@ rm(file.name)
 #  # There are also x, y, and z variables for three feature types, 9
 #  # This accounts for 36 of the 38 variables, and the remaining 2 are:
 #  # total_accel_* and var_total_accel_*
-#rm(test)
 
 # The 8 non-predictors are:
 # - X: The index of the observation, ranges from 1 to 19622
@@ -111,27 +110,65 @@ rm(file.name)
 #  rename(variable = name, na.fraction = value) %>%
 #  filter(na.fraction == 0)
 
-# There are two types of data in this dataset, and they become noticeable by
-# checking the pattern of the NA values. 67 of the variables contain 97.9% NA
-# values, and the exact number of NAs is the same for each variable. Meanwhile
-# the remaining 93 variables all contain 0 NAs. By checking the supporting
-# material from the original researchers, one can see that the variables with
-# large NA fractions are variables summarizing a "window" of data.
+# There are two types of data in this dataset, and the difference can be
+# observed by checking the pattern of the NA values. 67 of the variables contain
+# 97.9% NA values, and the exact number of NAs is the same for each variable.
+# Meanwhile the remaining 93 variables all contain 0 NAs. By checking the
+# supporting material from the original researchers, one can see that the
+# variables with large NA fractions are variables summarizing a "window" of
+# data.
 
 # To see which type of data are needed for this assignment, the test data can be
 # checked. The test set shows that the predictions will not be based on the
 # summary data, so for this reason those columns can be excluded.
 
 # Get column names for the summary variables
-NA.cols <- train.data.raw %>%
+NA.cols1 <- train.data.raw %>%
   map_dbl(NAFraction) %>%
   subset(. != 0) %>%
-  names()
+  names()  # 67 variables
 
 # Subset the training data
 train.data <- train.data.raw %>%
-  select(-NA.cols) %>%
+  select(-NA.cols1) %>%
   as_tibble()
+#rm(NA.cols, NAFraction)
+
+# The method above does not remove all of the summary columns from the data. It
+# is reported in the paper that that are 96 in total. Figure out what happened
+# to the other 29 variables
+
+# It looks like they were lost when loading in the data
+train.data2 <- read.csv(file.name, stringsAsFactors = FALSE) %>%
+  mutate_at(c(2, 5:6, 160), as.factor) %>%
+  mutate_at(c(8:159), as.double)
+
+# Get column names for the summary variables
+NA.cols2 <- train.data2 %>%
+  map_dbl(NAFraction) %>%
+  subset(. != 0) %>%
+  names()  # 100 variables, was expecting 96
+
+# Subset the training data
+train.data3 <- train.data2 %>%
+  select(-NA.cols2) %>%
+  as_tibble()
+#rm(NA.cols2, NAFraction)
+
+# What are the 4 unexpected variables?
+grep("avg", NA.cols2, value = TRUE, invert = TRUE) %>%  # 12
+  grep("var", ., value = TRUE, invert = TRUE) %>%  # 16
+  grep("stddev", ., value = TRUE, invert = TRUE) %>%  # 12
+  grep("max", ., value = TRUE, invert = TRUE) %>%  # 12
+  grep("min", ., value = TRUE, invert = TRUE) %>%  # 12
+  grep("amplitude", ., value = TRUE, invert = TRUE) %>%  # 12
+  grep("kurtosis", ., value = TRUE, invert = TRUE) %>%  # 12
+  grep("skewness", ., value = TRUE, invert = TRUE)  # 12
+#"var_total_accel_belt", "var_accel_arm", "var_accel_dumbbell", "var_accel_forearm"
+
+table(sapply(train.data3, class))
+
+
 
 
 
