@@ -53,160 +53,104 @@ if (!file.exists(file.name)) {
 }
 
 # Load in the training data
-train.data.raw <- read.csv(file.name)
-#rm(file.name)
+train.data <- read.csv(file.name, stringsAsFactors = FALSE) %>%  # 19622 x 160
+  mutate_at(c(2, 5:6, 160), as.factor) %>%
+  mutate_at(c(8:159), as.double)  # 33 columns had NAs introduced by coercion
+rm(file.name)
 
-# The team that produced the data wrote a paper on their project, and the paper
-# contains valuable details on the variables. The variables will be checked more
-# closely to understand the references in the paper.
-#names(train.data)  # 160
-#grep("belt", names.all, value = TRUE)  # 38
-#grep("belt", names.all, value = TRUE, invert = TRUE)  # 122
-#grep("forearm", names.left1, value = TRUE)  # 38
-#grep("forearm", names.left1, value = TRUE, invert = TRUE)  # 84
-#grep("arm", names.left2, value = TRUE)  # 38
-#grep("arm", names.left2, value = TRUE, invert = TRUE)  # 46
-#grep("dumbbell", names.left3, value = TRUE)  # 38
-#grep("dumbbell", names.left3, value = TRUE, invert = TRUE)  # 8
-# Each sensor location has 38 variables, the eight remaining are not predictors
-# What are the 38 variables for each sensor?
-# Euler angles: roll, pitch, and yaw
-#grep("avg", names.belt, value = TRUE, invert = TRUE) %>%
-#  # Variance: roll, pitch, and yaw
-#  grep("stddev", ., value = TRUE, invert = TRUE) %>%
-#  grep("max", ., value = TRUE, invert = TRUE) %>%
-#  grep("min", ., value = TRUE, invert = TRUE) %>%
-#  grep("amplitude", ., value = TRUE, invert = TRUE) %>%
-#  grep("kurtosis", ., value = TRUE, invert = TRUE) %>%
-#  grep("skewness", ., value = TRUE, invert = TRUE) %>%
-#  # There are roll, pitch, and yaw variables for 9 different feature types, 27
-#  # Accelerometer: x, y, and z
-#  grep("gyros", ., value = TRUE, invert = TRUE) %>%
-#  grep("magnet", ., value = TRUE, invert = TRUE)
-#  # There are also x, y, and z variables for three feature types, 9
-#  # This accounts for 36 of the 38 variables, and the remaining 2 are:
-#  # total_accel_* and var_total_accel_*
-
-# The 8 non-predictors are:
-# - X: The index of the observation, ranges from 1 to 19622
-# - user_name: The name of one of the six males performing the test
-# - timestamp_part_1
-# - timestamp_part_2
-# - cvtd_timestamp
-# - new_window
-# - num_window
-# - classe
-
-# Check out NA values
-#train.NA.cols <- train.data.raw %>%
-#  map_dbl(NAFraction) %>%
-#  enframe() %>%
-#  rename(variable = name, na.fraction = value) %>%
-#  filter(na.fraction != 0)
-
-#train.complete.cols <- train.data.raw %>%
-#  map_dbl(NAFraction) %>%
-#  enframe() %>%
-#  rename(variable = name, na.fraction = value) %>%
-#  filter(na.fraction == 0)
+# Check for NA values
+NA.cols <- train.data %>%
+  map_dbl(NAFraction) %>%
+  subset(. != 0) %>%
+  names()  # 100 variables, the 96 and the var_accel for each sensor
 
 # There are two types of data in this dataset, and the difference can be
-# observed by checking the pattern of the NA values. 67 of the variables contain
-# 97.9% NA values, and the exact number of NAs is the same for each variable.
-# Meanwhile the remaining 93 variables all contain 0 NAs. By checking the
-# supporting material from the original researchers, one can see that the
-# variables with large NA fractions are variables summarizing a "window" of
-# data.
+# observed by checking the pattern of NA values. Several variables contain 98%
+# or more NAs. The research paper explains that these variables summarize a
+# "window" of data.
 
-# To see which type of data are needed for this assignment, the test data can be
-# checked. The test set shows that the predictions will not be based on the
-# summary data, so for this reason those columns can be excluded.
-
-# Get column names for the summary variables
-NA.cols1 <- train.data.raw %>%
-  map_dbl(NAFraction) %>%
-  subset(. != 0) %>%
-  names()  # 67 variables
+# To see which type of data are needed for this assignment the test data can be
+# checked. It can be seen that the test set do not contain summary data, so the
+# prediction model should not be built with the summary variables, and for this
+# reason they can be excluded.
 
 # Subset the training data
-train.data <- train.data.raw %>%
-  select(-NA.cols1) %>%
-  as_tibble()
-#rm(NA.cols, NAFraction)
-
-# The method above does not remove all of the summary columns from the data. It
-# is reported in the paper that that are 96 in total. Figure out what happened
-# to the other 29 variables
-
-# It looks like they were lost when loading in the data
-train.data2 <- read.csv(file.name, stringsAsFactors = FALSE) %>%
-  mutate_at(c(2, 5:6, 160), as.factor) %>%
-  mutate_at(c(8:159), as.double)
-
-# Get column names for the summary variables
-NA.cols2 <- train.data2 %>%
-  map_dbl(NAFraction) %>%
-  subset(. != 0) %>%
-  names()  # 100 variables, was expecting 96
-
-# Subset the training data
-train.data3 <- train.data2 %>%
-  select(-NA.cols2) %>%
-  as_tibble()
-#rm(NA.cols2, NAFraction)
-
-# What are the 4 unexpected variables?
-grep("avg", NA.cols2, value = TRUE, invert = TRUE) %>%  # 12
-  grep("var", ., value = TRUE, invert = TRUE) %>%  # 16
-  grep("stddev", ., value = TRUE, invert = TRUE) %>%  # 12
-  grep("max", ., value = TRUE, invert = TRUE) %>%  # 12
-  grep("min", ., value = TRUE, invert = TRUE) %>%  # 12
-  grep("amplitude", ., value = TRUE, invert = TRUE) %>%  # 12
-  grep("kurtosis", ., value = TRUE, invert = TRUE) %>%  # 12
-  grep("skewness", ., value = TRUE, invert = TRUE)  # 12
-#"var_total_accel_belt", "var_accel_arm", "var_accel_dumbbell", "var_accel_forearm"
-
-table(sapply(train.data3, class))
+train.data <- train.data %>%
+  select(-NA.cols) %>%
+  as_tibble()  # 19622 obs. of 60 variables
+# At this point the data are tidy
+rm(NA.cols, NAFraction)
 
 
+# Part 2) Additional Data Processing--------------------------------------------
 
+# Which variables should be eliminated before splitting the data and fitting a
+# model?
+#summary(train.data$X)  # X is just an index of the observations, eliminate it
+# The importance of user_name is explicitly mentioned in the paper, keep it
 
+# The raw_timestamp variables are related to the abosolute time that the act was
+# performed, but they would contribute little to a prediction model as is
+#plot(train.data$raw_timestamp_part_1 ~ train.data$X)  # 4 horizontal dash lines
+#plot(train.data$raw_timestamp_part_2 ~ train.data$X)  # Dense noise
+#plot(train.data$raw_timestamp_part_2 ~ train.data$raw_timestamp_part_1)  # 6v ln
+#filter(train.data, user_name == "adelmo") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
+#filter(train.data, user_name == "carlitos") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
+#filter(train.data, user_name == "charles") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
+#filter(train.data, user_name == "eurico") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
+#filter(train.data, user_name == "jeremy") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
+#filter(train.data, user_name == "pedro") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
+#filter(train.data, user_name == "adelmo" | user_name == "carlitos") %>%
+#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # 2 v lines
 
+# Check cvtd_timestamp
+#train.data %>%
+#  group_by(cvtd_timestamp, user_name) %>%
+#  summarize(count = n()) %>%
+#  spread(key = user_name, value = count)
+# This is just the absolute timestamp of the exercise, not important for model
 
+# new_window simply indicates if that row contains summary observations or not
 
+# How many users are in each window?
+#train.data %>%
+#  group_by(num_window, user_name) %>%
+#  summarize() %>%
+#  group_by(num_window) %>%
+#  summarize(unique.users = n()) %>%
+#  select(unique.users) %>%
+#  max()  # 1, each window only has one user
+# How many exercise types are in each window?
+#train.data %>%
+#  group_by(num_window, classe) %>%
+#  summarize() %>%
+#  group_by(num_window) %>%
+#  summarize(unique.exer = n()) %>%
+#  select(unique.exer) %>%
+#  max()  # 1, each window only has one exercise
+# If each window is one user doing one exercise it ends up as a perfect
+# predictor of the classe variable. This of course is not the intention of the
+# assignment, so this variable will be removed.
 
-# Check how variables change with time in a given window:
-#test3 <- filter(train.data.raw, num_window == 1)
-#plot(test3$roll_belt ~ test3$raw_timestamp_part_2)
-#plot(test3$pitch_belt ~ test3$raw_timestamp_part_2)
-#plot(test3$yaw_belt ~ test3$raw_timestamp_part_2)
-#plot(test3$roll_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$pitch_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$yaw_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$kurtosis_roll_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$kurtosis_picth_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$kurtosis_yaw_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$skewness_roll_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$skewness_pitch_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$skewness_yaw_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$max_yaw_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$min_yaw_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$amplitude_yaw_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$total_accel_dumbbell ~ test3$raw_timestamp_part_2)
-#plot(test3$gyros_dumbbell_x ~ test3$raw_timestamp_part_2)
-#plot(test3$gyros_dumbbell_y ~ test3$raw_timestamp_part_2)
-#plot(test3$gyros_dumbbell_z ~ test3$raw_timestamp_part_2)
-#plot(test3$accel_dumbbell_x ~ test3$raw_timestamp_part_2)
-#plot(test3$accel_dumbbell_y ~ test3$raw_timestamp_part_2)
-#plot(test3$accel_dumbbell_z ~ test3$raw_timestamp_part_2)
-#plot(test3$magnet_dumbbell_x, test3$raw_timestamp_part_2)
-#plot(test3$magnet_dumbbell_y, test3$raw_timestamp_part_2)
-#plot(test3$magnet_dumbbell_z, test3$raw_timestamp_part_2)
-#plot(test3$magnet_dumbbell_z, test3$raw_timestamp_part_2)
+# The next 52 variables are measurements, check what they are 
+#td.names <- names(train.data)  
+#length(grep("belt", td.names))  # 13
+#length(grep("forearm", td.names))  # 13
+#length(grep("_arm", td.names))  # 13
+#length(grep("dumbbell", td.names))  # 13
+#rm(td.names)
+# The next 52 variables are a series of 13 measurements for each of the 4 sensor
+# locations. For each sensor location, 4 of the 13 measures are roll, pitch, yaw
+# and total acceleration. The remaining 9 are x, y, and z, components for each
+# of: gyro, acceleration, and magnet.
 
-
-
-
+# The final variable, classe, is of course the outcome to be predicted.
 
 
 
