@@ -27,6 +27,7 @@
 
 
 library(tidyverse)
+library(caret)
 
 
 # Part 0) Function definitions--------------------------------------------------
@@ -152,9 +153,31 @@ rm(NA.cols, NAFraction)
 
 # The final variable, classe, is of course the outcome to be predicted.
 
+# Based on the checks above, six columns can be removed from the data:
+train.data <- train.data %>%
+  select(c(-1, -(3:7)))
+
+# Next split off a validation data set from the trianing data
+set.seed(190522)
+in.train1 <- createDataPartition(y = train.data$classe, p = 0.8, list = FALSE)
+train.data1 <- train.data[in.train1, ]
+validation.data <- train.data[-in.train1, ]
+rm(in.train1)
+
+
+# Part 3) Model Fitting---------------------------------------------------------
 
 
 
+
+
+
+
+# Check plots of principal components
+pcas <- prcomp(train.data[, c(-1, -54)])
+plot(pcas$x[, 1], pcas$x[, 2], col = train.data$user_name)
+plot(pcas$x[, 1], pcas$x[, 2], col = train.data$classe)
+rm(pcas)
 
 
 
