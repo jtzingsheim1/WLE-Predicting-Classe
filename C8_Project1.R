@@ -28,6 +28,7 @@
 
 library(tidyverse)
 library(caret)
+library(randomForest)
 
 
 # Part 0) Function definitions--------------------------------------------------
@@ -167,25 +168,55 @@ rm(in.train1)
 
 # Part 3) Model Fitting---------------------------------------------------------
 
+# Running the default rf will use 500 trees which may take too long to compute,
+# the ntree will start small and increase as accuracy improves and performance
+# allows.
+predictors <- select(as.data.frame(train.data1), -classe)
+response <- train.data1$classe
+#rf.model1 <- train(x = predictors, y = response, method = "rf", ntree = 4)
+#rf.model1$times  # elapsed = 36.92
+#rf.model2 <- train(x = predictors, y = response, method = "rf", ntree = 8)
+#rf.model2
+#rf.model2$times  # elapsed = 61.69
+#varImp(rf.model2)
+#rf.model3 <- train(x = predictors, y = response, method = "rf", ntree = 16)
+#rf.model3
+#rf.model3$times  # elapsed = 120.87
+#varImp(rf.model3)
+#rf.model4 <- train(x = predictors, y = response, method = "rf", ntree = 32)
+#rf.model4
+#rf.model4$times  # elapsed 224.85
+#varImp(rf.model4)
+#rf.model5 <- train(x = predictors, y = response, method = "rf", ntree = 64)
+#rf.model5
+#rf.model5$times  # elapsed 464.7
+#varImp(rf.model5)
+#rf.model6 <- train(x = predictors, y = response, method = "rf", ntree = 128)
+#rf.model6
+#rf.model6$times  # elapsed 927.81
+#varImp(rf.model6)
+#rf.model7 <- train(x = predictors, y = response, method = "rf", ntree = 256)
+#rf.model7
+#rf.model7$times  # elapsed 1842.39
+#varImp(rf.model7)
+rf.model8 <- train(x = predictors, y = response, method = "rf")
+rf.model8
+rf.model8$times  # elapsed
+varImp(rf.model8)
 
+#save(rf.model1, rf.model2, rf.model3, rf.model4, rf.model5, rf.model6,
+#     rf.model7, file = "rf.models.RData")
 
+rf.model2b <- train(x = predictors, y = response, method = "rf", ntree = 8,
+                    importance = TRUE)
+rf.model6b <- train(x = predictors, y = response, method = "rf", ntree = 128)
+rf.model6b
+rf.model6b$times  # elapsed 
+varImp(rf.model6b)
 
-
-
-
-# Check plots of principal components
-pcas <- prcomp(train.data[, c(-1, -54)])
-plot(pcas$x[, 1], pcas$x[, 2], col = train.data$user_name)
-plot(pcas$x[, 1], pcas$x[, 2], col = train.data$classe)
-rm(pcas)
-
-
-
-
-
-
-
-
-
+predictors <- select(as.data.frame(train.data), -classe)
+response <- train.data$classe
+tuneRF(x = predictors, y = response)
+tuneRF(x = predictors, y = response, mtryStart = 7)
 
 
