@@ -18,12 +18,14 @@
 # Specialization on Coursera.
 #
 # The instructions say to build a model that predicts the "classe" variable
-# using any of the other variables in the dataset.
+# using any of the other variables in the dataset. The model must then be used
+# to predict the outcome of 20 different test cases.
 #
 # The input for this document is the WLE dataset which comes from the URL below.
-# The script leaves behind data objects and the model object that best predicted
-# the outcome, but the primary purpose is performing the analysis which can
-# later be summarized in a markdown file and report.
+# The script leaves behind data objects, the model object that best predicted
+# the outcome, and the predictions for the test data, but the primary purpose is
+# performing the analysis which can later be summarized in a markdown file and
+# report.
 
 
 library(tidyverse)
@@ -69,7 +71,7 @@ if (!file.exists(training.file)) {
 }
 
 # Load in the raw training data
-raw.train.data <- read.csv(training.file, stringsAsFactors = F)  # 19622 x 160
+raw.train.data <- read.csv(training.file, stringsAsFactors = F)  # 19622 of 160
 
 # Next split off a validation data set from the training data
 set.seed(190522)
@@ -170,11 +172,9 @@ train.subset <- select(train.subset, c(-1, -(3:7)))
 # Extract predictors and responses to reduce calculation time
 predictors <- select(train.subset, -classe)  # 17662 obs. of 53 variables
 response <- train.subset$classe  # Factor with 5 levels, 17662 long
-rf.model1 <- train(x = predictors, y = response, method = "rf")
-# save(rf.model1, file = "rf.models.RData")
+# rf.model1 <- train(x = predictors, y = response, method = "rf")
 # rf.model1$times  # elapsed = 3746, about 62 minutes
-rf.model1$finalModel  # OOB error rate of 0.48%
-# head(getTree(rf.model1$finalModel))
+# rf.model1$finalModel  # OOB error rate of 0.48%
 # The out of bag estimate of error rate of 0.48% is quite good, so next the
 # performance of the model on the validation data will be checked.
 rm(predictors, response)
@@ -188,6 +188,7 @@ validation.data <- validation.data %>%  # 1960 obs. of 160 variables
   ConvertDataTypes() %>% # 1960 obs. of 160 variables
   SubsetWLE()  # 1960 obs. of 54 variables
 
+# Predict on validation data and check performance
 rf.model1 %>%
   predict(newdata = validation.data) %>%
   confusionMatrix(reference = validation.data$classe)  # Accuracy is 0.9959
@@ -198,12 +199,28 @@ rf.model1 %>%
 # compute time (approximately 1hr) it does not seem worthwhile to fine tune this
 # model or fit models using other methods.
 
+# With high performance on both the training and validation data, the model is
+# ready to be tested with the test data.
 
 
+# Part 5) Predictions on Test Data----------------------------------------------
 
+# Check if the file exists in the directory before downloading it again
+testing.file <- "pml-testing.csv"
+if (!file.exists(testing.file)) {
+  url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url, testing.file)
+  rm(url)
+}
 
+# Load in the raw testing data
+raw.test.data <- read.csv(testing.file, stringsAsFactors = F)  # 20 obs. of 160
+# Process the testing data the same as before
+test.data <- raw.test.data %>%  # 20 obs. of 160 variables
+  ConvertDataTypes() %>% # 20 obs. of 160 variables
+  SubsetWLE()  # 20 obs. of 54 variables
+rm(na.columns, testing.file)
 
-
-
-
+# Predict on testing data
+test.predictions <- predict(rf.model1, newdata = test.data)  # 20 long
 
