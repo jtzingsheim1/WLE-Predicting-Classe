@@ -44,6 +44,19 @@ ConvertDataTypes <- function(data) {
     mutate_at(c(2, 5:6, 160), as.factor)
 }
 
+SubsetWLE <- function(data) {
+  # Subsets data frames of the WLE dataset to prepare them for analysis
+  #
+  # Args:
+  #   data: a data object to be subset
+  #
+  # Returns:
+  #   The subsetted data object
+  data %>%
+  select(-na.columns) %>%
+  select(c(-1, -(3:7)))
+}
+
 
 # Part 1) Loading and preprocessing the data------------------------------------
 
@@ -69,7 +82,7 @@ rm(training.file, in.train)
 # Part 2) Explore and Process Data----------------------------------------------
 
 # Check out the data
-str(train.subset[1:15])
+# str(train.subset[1:15])
 # Some factor variables like user_name and classe were loaded as character type
 # and need to be converted. Also, beginning at column 12 some numeric variables
 # were loaded as character type and also need conversion. It can be seen that 
@@ -80,14 +93,14 @@ str(train.subset[1:15])
 train.subset <- ConvertDataTypes(train.subset)  # 17662 obs of 160 variables
 
 # Check the data again
-summary(train.subset[1:15])
+# summary(train.subset[1:15])
 # It can be seen that some of the variables contain large fractions of NAs now.
 
 # Check for NA values
 na.fractions <- train.subset %>%
   map_dbl(function(x) {mean(is.na(x))}) %>%
   subset(. != 0)  # Named num [1:100], the 96 calculated features and 4 var_acc
-summary(na.fractions)  # Min. = 0.9796, Max. = 1.0000
+# summary(na.fractions)  # Min. = 0.9796, Max. = 1.0000
 # Of the 160 original variables in the data, 100 of them contain NA values, and
 # the fraction of NAs in each these columns is over 97%. By reading the research
 # paper, one can find that the authors defined "windows" of data (several
@@ -154,17 +167,40 @@ train.subset <- select(train.subset, c(-1, -(3:7)))
 # plot(train.subset$classe)  # 5 levels, reasonably even distribution
 # Based on the check above, model fitting can proceed
 
-# Extract predictors and responses to expedite model fitting
+# Extract predictors and responses to reduce calculation time
 predictors <- select(train.subset, -classe)  # 17662 obs. of 53 variables
 response <- train.subset$classe  # Factor with 5 levels, 17662 long
 rf.model1 <- train(x = predictors, y = response, method = "rf")
 # save(rf.model1, file = "rf.models.RData")
-rf.model1$times  #
-rf.model1$finalModel  # OOB error rate of
-head(getTree(rf.model1$finalModel))
+# rf.model1$times  # elapsed = 3746, about 62 minutes
+rf.model1$finalModel  # OOB error rate of 0.48%
+# head(getTree(rf.model1$finalModel))
+# The out of bag estimate of error rate of 0.48% is quite good, so next the
+# performance of the model on the validation data will be checked.
+rm(predictors, response)
 
 
-# Need to put subsetting steps into a function
+# Part 4) Model Validation------------------------------------------------------
+
+# Before checking the performance of the model on the validation data, the
+# validation data will be processed in the same way as the training set
+validation.data <- validation.data %>%  # 1960 obs. of 160 variables
+  ConvertDataTypes() %>% # 1960 obs. of 160 variables
+  SubsetWLE()  # 1960 obs. of 54 variables
+
+rf.model1 %>%
+  predict(newdata = validation.data) %>%
+  confusionMatrix(reference = validation.data$classe)  # Accuracy is 0.9959
+
+# The accuracy of the model on the original training data was high, and the
+# accuracy was still high on the validation data, suggesting that overfitting
+# was not a problem here. Additionally, with such a high accuracy and a long
+# compute time (approximately 1hr) it does not seem worthwhile to fine tune this
+# model or fit models using other methods.
+
+
+
+
 
 
 
