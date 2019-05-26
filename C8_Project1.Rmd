@@ -5,26 +5,107 @@ date: "May 26, 2019"
 output: html_document
 ---
 
+
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(echo = TRUE)
+
+ConvertDataTypes <- function(data) {
+  # Converts data types of the WLE dataset variables, known to introduce NAs
+  #
+  # Args:
+  #   data: a data object to be adjusted
+  #
+  # Returns:
+  #   The data object where the data types of variables are converted
+  suppressWarnings(mutate_at(data, c(8:159), as.double)) %>%  # NAs to 33 cols
+    mutate_at(c(2, 5:6, 160), as.factor)
+}
+
+SubsetWLE <- function(data) {
+  # Subsets data frames of the WLE dataset to prepare them for analysis
+  #
+  # Args:
+  #   data: a data object to be subset
+  #
+  # Returns:
+  #   The subsetted data object
+  data %>%
+  select(-na.columns) %>%
+  select(c(-1, -(3:7)))
+}
+
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Overview
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+This report is for the peer-graded project in the Practical Machine Learning
+course from Johns Hopkins University within the Data Science Specialization on
+Coursera. The instructions say to use the WLE dataset to build a model that
+predicts the `classe` variable using any of the other variables in the dataset.
+The model must then be used to predict the outcome of 20 different test cases.
 
-```{r cars}
-summary(cars)
+To meet the objective, the data were loaded into R and pre-processed. The data
+were explored and processed further. A model was fit to training data using the
+random forest method. The model was evaluated on validation data, and it was
+found to have an accuracy of 99.6%. Lastly, the model was used to predict the
+test cases.
+
+
+## Acknowledgement
+
+Acknowledgement for this dataset goes to:
+
+>Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative
+Activity Recognition of Weight Lifting Exercises. Proceedings of 4th
+International Conference in Cooperation with SIGCHI (Augmented Human '13) .
+Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Additional information on their project can be found [here][1].
+
+[1]: http://groupware.les.inf.puc-rio.br/har "here"
+
+
+## Part 1) Loading and Pre-processing the Data
+
+In order to fall within the report length limitations some text and figure
+output will be suppressed; when applicable this is noted at the beginning of the
+code chunk, and the output will be described as comments. Additionally, 2
+functions were written to facilitate data processing. The code for these
+functions is not shown either. If interested, unabriged analysis can be viewed
+in the [GitHub repo][2] for this project submission.
+
+[2]: xxxxx "GitHub repo"
+
+The first step in the analysis loads the necessary packages and training data.
+
+```{r loading, message = FALSE}
+
+# Messages suppressed for this code chunk
+library(tidyverse)
+library(caret)
+
+# Check if the file exists in the directory before downloading it again
+training.file <- "pml-training.csv"
+if (!file.exists(training.file)) {
+  url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url, training.file)
+  rm(url)
+}
+
+# Load in the raw training data
+raw.train.data <- read.csv(training.file, stringsAsFactors = F)  # 19622 of 160
+
+# Next split off a validation data set from the training data
+set.seed(190522)
+in.train <- createDataPartition(y = raw.train.data$classe, p = 0.9, list = F)
+train.subset <- raw.train.data[in.train, ]  # 17662 obs. of 160 variables
+validation.data <- raw.train.data[-in.train, ]  # 1960 obs. of 160 variables
+rm(training.file, in.train)
+
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
