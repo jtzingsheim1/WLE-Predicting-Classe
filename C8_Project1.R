@@ -1,5 +1,5 @@
 # Coursera Data Science Specialization Course 8 Project 1 Script----------------
-# Predicting exercise quality with in the "Weight Lifting Exercises" dataset
+# Predicting exercise quality in the "Weight Lifting Exercises" dataset
 
 
 # Acknowledgement for this dataset goes to:
@@ -21,202 +21,153 @@
 # using any of the other variables in the dataset.
 #
 # The input for this document is the WLE dataset which comes from the URL below.
-# The script leaves behind the data object and the model object that best
-# predicted the outcome, but the primary purpose is performing the analysis
-# which can later be summarized in a markdown file and report.
+# The script leaves behind data objects and the model object that best predicted
+# the outcome, but the primary purpose is performing the analysis which can
+# later be summarized in a markdown file and report.
 
 
 library(tidyverse)
 library(caret)
-library(randomForest)
 
 
 # Part 0) Function definitions--------------------------------------------------
 
-NAFraction <- function(x) {
-  # Calculates the NA fraction of an object
+ConvertDataTypes <- function(data) {
+  # Converts data types of the WLE dataset variables, known to introduce NAs
   #
   # Args:
-  #   x: an R object such as a vector
+  #   data: a data object to be adjusted
   #
   # Returns:
-  #   A numeric value indicating the fraction of NA values in the object
-  mean(is.na(x))
+  #   The data object where the data types of variables are converted
+  suppressWarnings(mutate_at(data, c(8:159), as.double)) %>%  # NAs to 33 cols
+    mutate_at(c(2, 5:6, 160), as.factor)
 }
+
 
 # Part 1) Loading and preprocessing the data------------------------------------
 
-file.name <- "pml-training.csv"
 # Check if the file exists in the directory before downloading it again
-if (!file.exists(file.name)) {
+training.file <- "pml-training.csv"
+if (!file.exists(training.file)) {
   url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
-  download.file(url, file.name)
+  download.file(url, training.file)
   rm(url)
 }
 
-# Load in the training data
-train.data <- read.csv(file.name, stringsAsFactors = FALSE) %>%  # 19622 x 160
-  mutate_at(c(2, 5:6, 160), as.factor) %>%
-  mutate_at(c(8:159), as.double)  # 33 columns had NAs introduced by coercion
-rm(file.name)
+# Load in the raw training data
+raw.train.data <- read.csv(training.file, stringsAsFactors = F)  # 19622 x 160
+
+# Next split off a validation data set from the training data
+set.seed(190522)
+in.train <- createDataPartition(y = raw.train.data$classe, p = 0.9, list = F)
+train.subset <- raw.train.data[in.train, ]  # 17662 obs. of 160 variables
+validation.data <- raw.train.data[-in.train, ]  # 1960 obs. of 160 variables
+rm(training.file, in.train)
+
+
+# Part 2) Explore and Process Data----------------------------------------------
+
+# Check out the data
+str(train.subset[1:15])
+# Some factor variables like user_name and classe were loaded as character type
+# and need to be converted. Also, beginning at column 12 some numeric variables
+# were loaded as character type and also need conversion. It can be seen that 
+# many of these values are simply blank spaces. A function was created to do the
+# conversion and easily repeat it later on the validation and test sets. When
+# the blank spaces are converted to numeric it introduces NAs by coercion and
+# these warnings are suppressed in the function.
+train.subset <- ConvertDataTypes(train.subset)  # 17662 obs of 160 variables
+
+# Check the data again
+summary(train.subset[1:15])
+# It can be seen that some of the variables contain large fractions of NAs now.
 
 # Check for NA values
-NA.cols <- train.data %>%
-  map_dbl(NAFraction) %>%
-  subset(. != 0) %>%
-  names()  # 100 variables, the 96 and the var_accel for each sensor
+na.fractions <- train.subset %>%
+  map_dbl(function(x) {mean(is.na(x))}) %>%
+  subset(. != 0)  # Named num [1:100], the 96 calculated features and 4 var_acc
+summary(na.fractions)  # Min. = 0.9796, Max. = 1.0000
+# Of the 160 original variables in the data, 100 of them contain NA values, and
+# the fraction of NAs in each these columns is over 97%. By reading the research
+# paper, one can find that the authors defined "windows" of data (several
+# sequential observations) and calculated features for the window. These window
+# level summaries represent a second type of data in the dataset.
 
-# There are two types of data in this dataset, and the difference can be
-# observed by checking the pattern of NA values. Several variables contain 98%
-# or more NAs. The research paper explains that these variables summarize a
-# "window" of data.
+# Before proceeding it should be determined which type of data should be used as
+# the basis for prediction. By checking the test data set it can be seen that
+# individual data points are provided (not window summaries). Since the
+# prediction model will not be based on window summary data, the variables that
+# contain only this data can be excluded.
 
-# To see which type of data are needed for this assignment the test data can be
-# checked. It can be seen that the test set do not contain summary data, so the
-# prediction model should not be built with the summary variables, and for this
-# reason they can be excluded.
+# Remove window summary columns from the training subset data
+na.columns <- names(na.fractions)  # Get the names of the NA columns
+train.subset <- select(train.subset, -na.columns)  # 17622 obs. of 60 variables
+rm(na.fractions)
 
-# Subset the training data
-train.data <- train.data %>%
-  select(-NA.cols) %>%
-  as_tibble()  # 19622 obs. of 60 variables
-# At this point the data are tidy
-rm(NA.cols, NAFraction)
+# At this point the data are in tidy format, but it is possible that the set
+# still contains variables that would cause problems or unnecessary complication
+# in the model fitting step. In the section below the variables will be checked
+# to see if they are appropriate to keep as potential predictors:
+# - The X variable is just an index of the observations, it can be removed.
+# - The importance of user_name is explicitly mentioned in the paper, keep it.
+# - By checking some plots of the 3 timestamp variables it can be seen that they
+# are simply absolute timestamps of the activity. It is conceivable that
+# relative timestamps could be useful in model fitting, but the test data do not
+# contain enough information to apply that treatment. For this reason these 3
+# variables will be removed.
+# - new_window simply indicates if that row contains window summary observations
+# - Interestingly, it can be shown that the num_window could be a near perfect
+# predictor of classe since each window contains just one user and one classe.
+# As this is clearly not the intention of the project, this column will be
+# removed.
+# - The next 52 variables are a series of 13 measurements for each of the 4
+# sensor locations. For each sensor location, 4 of the 13 measures are roll,
+# pitch, yaw and total acceleration. The remaining 9 are x, y, and z, components
+# for each of: gyro, acceleration, and magnet.
+# - The last variable classe should be kept as it is the outcome to be predicted
 
+# Based on the checks above, six columns can be removed from the training data:
+train.subset <- select(train.subset, c(-1, -(3:7)))
 
-# Part 2) Additional Data Processing--------------------------------------------
-
-# Which variables should be eliminated before splitting the data and fitting a
-# model?
-#summary(train.data$X)  # X is just an index of the observations, eliminate it
-# The importance of user_name is explicitly mentioned in the paper, keep it
-
-# The raw_timestamp variables are related to the abosolute time that the act was
-# performed, but they would contribute little to a prediction model as is
-#plot(train.data$raw_timestamp_part_1 ~ train.data$X)  # 4 horizontal dash lines
-#plot(train.data$raw_timestamp_part_2 ~ train.data$X)  # Dense noise
-#plot(train.data$raw_timestamp_part_2 ~ train.data$raw_timestamp_part_1)  # 6v ln
-#filter(train.data, user_name == "adelmo") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
-#filter(train.data, user_name == "carlitos") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
-#filter(train.data, user_name == "charles") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
-#filter(train.data, user_name == "eurico") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
-#filter(train.data, user_name == "jeremy") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
-#filter(train.data, user_name == "pedro") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # Noise
-#filter(train.data, user_name == "adelmo" | user_name == "carlitos") %>%
-#  plot(raw_timestamp_part_2 ~ raw_timestamp_part_1, data = .)  # 2 v lines
-
-# Check cvtd_timestamp
-#train.data %>%
-#  group_by(cvtd_timestamp, user_name) %>%
-#  summarize(count = n()) %>%
-#  spread(key = user_name, value = count)
-# This is just the absolute timestamp of the exercise, not important for model
-
-# new_window simply indicates if that row contains summary observations or not
-
-# How many users are in each window?
-#train.data %>%
-#  group_by(num_window, user_name) %>%
-#  summarize() %>%
-#  group_by(num_window) %>%
-#  summarize(unique.users = n()) %>%
-#  select(unique.users) %>%
-#  max()  # 1, each window only has one user
-# How many exercise types are in each window?
-#train.data %>%
-#  group_by(num_window, classe) %>%
-#  summarize() %>%
-#  group_by(num_window) %>%
-#  summarize(unique.exer = n()) %>%
-#  select(unique.exer) %>%
-#  max()  # 1, each window only has one exercise
-# If each window is one user doing one exercise it ends up as a perfect
-# predictor of the classe variable. This of course is not the intention of the
-# assignment, so this variable will be removed.
-
-# The next 52 variables are measurements, check what they are 
-#td.names <- names(train.data)  
-#length(grep("belt", td.names))  # 13
-#length(grep("forearm", td.names))  # 13
-#length(grep("_arm", td.names))  # 13
-#length(grep("dumbbell", td.names))  # 13
-#rm(td.names)
-# The next 52 variables are a series of 13 measurements for each of the 4 sensor
-# locations. For each sensor location, 4 of the 13 measures are roll, pitch, yaw
-# and total acceleration. The remaining 9 are x, y, and z, components for each
-# of: gyro, acceleration, and magnet.
-
-# The final variable, classe, is of course the outcome to be predicted.
-
-# Based on the checks above, six columns can be removed from the data:
-train.data <- train.data %>%
-  select(c(-1, -(3:7)))
-
-# Next split off a validation data set from the trianing data
-set.seed(190522)
-in.train1 <- createDataPartition(y = train.data$classe, p = 0.8, list = FALSE)
-train.data1 <- train.data[in.train1, ]
-validation.data <- train.data[-in.train1, ]
-rm(in.train1)
+# The data are now tidy and ready for model fitting.
 
 
 # Part 3) Model Fitting---------------------------------------------------------
 
-# Running the default rf will use 500 trees which may take too long to compute,
-# the ntree will start small and increase as accuracy improves and performance
-# allows.
-predictors <- select(as.data.frame(train.data1), -classe)
-response <- train.data1$classe
-#rf.model1 <- train(x = predictors, y = response, method = "rf", ntree = 4)
-#rf.model1$times  # elapsed = 36.92
-#rf.model2 <- train(x = predictors, y = response, method = "rf", ntree = 8)
-#rf.model2
-#rf.model2$times  # elapsed = 61.69
-#varImp(rf.model2)
-#rf.model3 <- train(x = predictors, y = response, method = "rf", ntree = 16)
-#rf.model3
-#rf.model3$times  # elapsed = 120.87
-#varImp(rf.model3)
-#rf.model4 <- train(x = predictors, y = response, method = "rf", ntree = 32)
-#rf.model4
-#rf.model4$times  # elapsed 224.85
-#varImp(rf.model4)
-#rf.model5 <- train(x = predictors, y = response, method = "rf", ntree = 64)
-#rf.model5
-#rf.model5$times  # elapsed 464.7
-#varImp(rf.model5)
-#rf.model6 <- train(x = predictors, y = response, method = "rf", ntree = 128)
-#rf.model6
-#rf.model6$times  # elapsed 927.81
-#varImp(rf.model6)
-#rf.model7 <- train(x = predictors, y = response, method = "rf", ntree = 256)
-#rf.model7
-#rf.model7$times  # elapsed 1842.39
-#varImp(rf.model7)
-rf.model8 <- train(x = predictors, y = response, method = "rf")
-rf.model8
-rf.model8$times  # elapsed
-varImp(rf.model8)
+# By reading the research paper, one can see that the authors used the random
+# forest method when building their own models, so that is clearly a good
+# starting point for this step. However, it is well established that the
+# boosting method is also a top performing technique for many data sets, so it
+# should be considered as well.
 
-#save(rf.model1, rf.model2, rf.model3, rf.model4, rf.model5, rf.model6,
-#     rf.model7, file = "rf.models.RData")
+# https://medium.com/@aravanshad/gradient-boosting-versus-random-forest-cfa3fa8f0d80
+# The url above is for an article that discusses the strengths and weaknesses of
+# the two methods. The article mentions that random forests are well suited to
+# multi-class problems like this one. In consideration of this and the selection
+# of random forests by the original researchers, that method will be tried here.
 
-rf.model2b <- train(x = predictors, y = response, method = "rf", ntree = 8,
-                    importance = TRUE)
-rf.model6b <- train(x = predictors, y = response, method = "rf", ntree = 128)
-rf.model6b
-rf.model6b$times  # elapsed 
-varImp(rf.model6b)
+# The article also mentions that bias could be introduced by imbalance among the
+# factor variables. This data set now contains 2 factor variables, so their
+# distribution is checked below.
+# plot(train.subset$user_name)  # 6 levels, reasonably even distribution
+# plot(train.subset$classe)  # 5 levels, reasonably even distribution
+# Based on the check above, model fitting can proceed
 
-predictors <- select(as.data.frame(train.data), -classe)
-response <- train.data$classe
-tuneRF(x = predictors, y = response)
-tuneRF(x = predictors, y = response, mtryStart = 7)
+# Extract predictors and responses to expedite model fitting
+predictors <- select(train.subset, -classe)  # 17662 obs. of 53 variables
+response <- train.subset$classe  # Factor with 5 levels, 17662 long
+rf.model1 <- train(x = predictors, y = response, method = "rf")
+# save(rf.model1, file = "rf.models.RData")
+rf.model1$times  #
+rf.model1$finalModel  # OOB error rate of
+head(getTree(rf.model1$finalModel))
+
+
+# Need to put subsetting steps into a function
+
+
+
+
 
 
