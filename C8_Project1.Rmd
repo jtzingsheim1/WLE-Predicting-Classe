@@ -69,16 +69,17 @@ Additional information on their project can be found [here][1].
 
 ## Part 1) Loading and Pre-processing the Data
 
-In order to fall within the report length limitations some text and figure
-output will be suppressed; when applicable this is noted at the beginning of the
-code chunk, and the output will be described as comments. Additionally, 2
-functions were written to facilitate data processing. The code for these
-functions is not shown either. If interested, unabriged analysis can be viewed
-in the [GitHub repo][2] for this project submission.
+In order to fall within the length limitations some text and figure output is
+suppressed in this report; when applicable this is noted at the beginning of the
+code chunk and the output is described as comments. Additionally, 2 functions
+were written to facilitate data processing, and the code for these functions is
+not shown either. For those interested, unabriged analysis can be viewed in the
+[GitHub repo][2] for this project submission.
 
-[2]: xxxxx "GitHub repo"
+[2]: xxxurlxxx "GitHub repo"
 
-The first step in the analysis loads the necessary packages and training data.
+In the code chunk below the required packages are loaded along with the training
+data.
 
 ```{r loading, message = FALSE}
 
@@ -105,6 +106,110 @@ validation.data <- raw.train.data[-in.train, ]  # 1960 obs. of 160 variables
 rm(training.file, in.train)
 
 ```
+
+
+## Part 2) Explore and Process Data
+
+In the next code chunk the data are previewed with `str()`, and it can be seen
+that some factor variables like `user_name` and `classe` were loaded as
+character type and need to be converted. Also, beginning at column 12 some
+numeric variables were loaded as character type and also need conversion. It can
+also be seen that many of these values are simply blank spaces. A function was
+created to do the type conversions and easily repeat it later on the validation
+and test sets. When the blank spaces are converted to numeric it introduces NAs
+by coercion and these warnings are suppressed in the function.
+
+```{r exploring}
+
+# Check out the data
+str(train.subset[1:15])
+# Convert some character columns to factor and some to numeric
+train.subset <- ConvertDataTypes(train.subset)  # 17662 obs of 160 variables
+# Check the data again
+summary(train.subset[1:15])  # Some columns have NAs
+# Check for NA values
+na.fractions <- train.subset %>%
+  map_dbl(function(x) {mean(is.na(x))}) %>%  # Calc. NA fraction of each column
+  subset(. != 0)  # Named num [1:100], the 96 calculated features and 4 var_acc
+summary(na.fractions)  # Min. = 0.9796, Max. = 1.0000
+
+```
+
+After checking the results of `summary()` it can be seen that some of the
+variables contain large fractions of `NA` values. Of the 160 original variables
+in the data, 100 of them contain NA values, and the fraction of `NA`s in each
+these columns is over 97%. By reading the research paper, one can find that the
+authors defined "windows" of data (several sequential observations) and
+calculated features for the window. These window level summaries represent a
+second type of data but are stored alongside the measurement data.
+
+Before proceeding it should be determined which type of data should be used as
+the basis for prediction. By checking the test data set it can be seen that
+individual data points are provided (not window summaries). Since the prediction
+model will not be based on window summary data, the variables that contain only
+this data can be excluded.
+
+```{r processing}
+
+# Remove window summary columns from the training subset data
+na.columns <- names(na.fractions)  # Get the names of the NA columns
+train.subset <- select(train.subset, -na.columns)  # 17622 obs. of 60 variables
+rm(na.fractions)
+# Remove additional unneeded columns
+train.subset <- select(train.subset, c(-1, -(3:7)))  # 17622 obs of 54 variables
+
+```
+
+After removing the 100 summary columns, the data were in tidy format, but still
+possibly contained variables that would cause problems or unnecessary
+complication in the model fitting step. The remaining variables were assessed,
+and it was determined that six columns could be removed from the training data.
+Additional detail on the justification for these eliminations can be found in
+the script for this project in the [GitHub repo][2]. As the unneeded variables
+were removed in the chunk above, the data are in tidy format and ready for model
+fitting.
+
+
+## Part 3) Model Fitting
+
+By reading the research paper, one can see that the authors used the random
+forest method when building their own models, so that is clearly a good
+starting point for this step. For this project, the random forest method was
+used first, and the need for alternative methods was assessed based its
+performance. Before proceeding the data were also checked for imbalance among
+the factor variables which could cause an issue for the random forest technique.
+
+```{r fitting}
+
+par(mfrow = c(1, 2))  # Setup plot space
+plot(train.subset$user_name)  # 6 levels, reasonably even distribution
+plot(train.subset$classe)  # 5 levels, reasonably even distribution
+
+# Extract predictors and responses to reduce calculation time
+predictors <- select(train.subset, -classe)  # 17662 obs. of 53 variables
+response <- train.subset$classe  # Factor with 5 levels, 17662 long
+rf.model1 <- train(x = predictors, y = response, method = "rf")
+print(rf.model1$finalModel)  # OOB error rate of 0.48%
+
+rm(predictors, response)
+
+```
+
+The out of bag estimate of error rate of 0.48% is quite good, so next step
+continues on to check the performance of the model on the validation data.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
