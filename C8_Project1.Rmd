@@ -179,7 +179,7 @@ used first, and the need for alternative methods was assessed based its
 performance. Before proceeding the data were also checked for imbalance among
 the factor variables which could cause an issue for the random forest technique.
 
-```{r fitting}
+```{r fitting, cache = TRUE}
 
 par(mfrow = c(1, 2))  # Setup plot space
 plot(train.subset$user_name)  # 6 levels, reasonably even distribution
@@ -199,18 +199,60 @@ The out of bag estimate of error rate of 0.48% is quite good, so next step
 continues on to check the performance of the model on the validation data.
 
 
+## Part 4) Model Validation
+
+In the code chunk below the validation data are processed in the same way as the
+training data. The model is then used to predict on the validation data.
+
+```{r validating}
+
+validation.data <- validation.data %>%  # 1960 obs. of 160 variables
+  ConvertDataTypes() %>% # 1960 obs. of 160 variables
+  SubsetWLE()  # 1960 obs. of 54 variables
+
+# Predict on validation data and check performance
+rf.model1 %>%
+  predict(newdata = validation.data) %>%
+  confusionMatrix(reference = validation.data$classe) %>%  # Accuracy is 0.9959
+  print()
+
+```
+
+The accuracy of the model on the original training data was high, and the
+accuracy was still high on the validation data, suggesting that overfitting
+was not a problem here. Additionally, with such a high accuracy and a long
+compute time (approximately 1hr) it does not seem worthwhile to fine tune this
+model or fit models using other methods. With high performance on both the
+training and validation data, the model is ready to be used on the test data.
 
 
+## Part 5) Predicting on Test Set
 
+In the final code chunk below, the testing data downloaded and then processed in
+the same way as the training data. The model is then used to predict on the test
+data, and the prediction results are shown below.
 
+```{r predicting}
 
+# Check if the file exists in the directory before downloading it again
+testing.file <- "pml-testing.csv"
+if (!file.exists(testing.file)) {
+  url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url, testing.file)
+  rm(url)
+}
 
+# Load in the raw testing data
+raw.test.data <- read.csv(testing.file, stringsAsFactors = F)  # 20 obs. of 160
+# Process the testing data the same as before
+test.data <- raw.test.data %>%  # 20 obs. of 160 variables
+  ConvertDataTypes() %>% # 20 obs. of 160 variables
+  SubsetWLE()  # 20 obs. of 54 variables
+rm(na.columns, testing.file)
 
+# Predict on testing data
+test.predictions <- predict(rf.model1, newdata = test.data)  # 20 long
+print(test.predictions)
 
-
-
-
-
-
-
+```
 
