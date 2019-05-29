@@ -143,7 +143,7 @@ rm(na.fractions)
 # - The last variable classe should be kept as it is the outcome to be predicted
 
 # Based on the checks above, six columns can be removed from the training data:
-train.subset <- select(train.subset, c(-1, -(3:7)))
+train.subset <- select(train.subset, c(-1, -(3:7)))  # 17622 obs of 54 variables
 
 # The data are now tidy and ready for model fitting.
 
@@ -165,16 +165,16 @@ train.subset <- select(train.subset, c(-1, -(3:7)))
 # The article also mentions that bias could be introduced by imbalance among the
 # factor variables. This data set now contains 2 factor variables, so their
 # distribution is checked below.
-# plot(train.subset$user_name)  # 6 levels, reasonably even distribution
-# plot(train.subset$classe)  # 5 levels, reasonably even distribution
+plot(train.subset$user_name)  # 6 levels, reasonably even distribution
+plot(train.subset$classe)  # 5 levels, reasonably even distribution
 # Based on the check above, model fitting can proceed
 
 # Extract predictors and responses to reduce calculation time
 predictors <- select(train.subset, -classe)  # 17662 obs. of 53 variables
 response <- train.subset$classe  # Factor with 5 levels, 17662 long
-# rf.model1 <- train(x = predictors, y = response, method = "rf")
+rf.model1 <- train(x = predictors, y = response, method = "rf")
 # rf.model1$times  # elapsed = 3746, about 62 minutes
-# rf.model1$finalModel  # OOB error rate of 0.48%
+rf.model1$finalModel  # OOB error rate of 0.48%
 # The out of bag estimate of error rate of 0.48% is quite good, so next the
 # performance of the model on the validation data will be checked.
 rm(predictors, response)

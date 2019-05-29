@@ -10,7 +10,7 @@ output: html_document
 
 knitr::opts_chunk$set(echo = TRUE)
 
-ConvertDataTypes <- function(data) {
+ConvertWLE <- function(data) {
   # Converts data types of the WLE dataset variables, known to introduce NAs
   #
   # Args:
@@ -46,16 +46,17 @@ Coursera. The instructions say to use the WLE dataset to build a model that
 predicts the `classe` variable using any of the other variables in the dataset.
 The model must then be used to predict the outcome of 20 different test cases.
 
-To meet the objective, the data were loaded into R and pre-processed. The data
-were explored and processed further. A model was fit to training data using the
-random forest method. The model was evaluated on validation data, and it was
-found to have an accuracy of 99.6%. Lastly, the model was used to predict the
-test cases.
+To meet the objective, the data were loaded into R and split into training and
+validation sets so that cross validation could be used to evaluate the model.
+The data were then explored and processed, and then a model was fit to the
+training subset using the random forest method. The model was evaluated on the
+validation set, and the expected out of sample error rate is 0.41%. Lastly, the
+model was used to predict the test cases.
 
 
 ## Acknowledgement
 
-Acknowledgement for this dataset goes to:
+Acknowledgement for the WLE dataset goes to:
 
 >Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative
 Activity Recognition of Weight Lifting Exercises. Proceedings of 4th
@@ -64,22 +65,18 @@ Stuttgart, Germany: ACM SIGCHI, 2013.
 
 Additional information on their project can be found [here][1].
 
-[1]: http://groupware.les.inf.puc-rio.br/har "here"
+[1]: http://groupware.les.inf.puc-rio.br/har "WLE Site"
 
 
 ## Part 1) Loading and Pre-processing the Data
 
-In order to fall within the length limitations some text and figure output is
-suppressed in this report; when applicable this is noted at the beginning of the
-code chunk and the output is described as comments. Additionally, 2 functions
-were written to facilitate data processing, and the code for these functions is
-not shown either. For those interested, unabriged analysis can be viewed in the
-[GitHub repo][2] for this project submission.
-
-[2]: xxxurlxxx "GitHub repo"
-
 In the code chunk below the required packages are loaded along with the training
-data.
+data. Message output is suppressed to conserve space. Additionally, 2 functions
+were written to facilitate data processing in this project, and the code for
+these functions is not shown either. For those interested, unabriged analysis
+can be viewed in the script in the [GitHub repo][2] for this project submission.
+
+[2]: https://github.com/jtzingsheim1/WLE-Predicting-Classe "GitHub repo"
 
 ```{r loading, message = FALSE}
 
@@ -110,23 +107,23 @@ rm(training.file, in.train)
 
 ## Part 2) Explore and Process Data
 
-In the next code chunk the data are previewed with `str()`, and it can be seen
-that some factor variables like `user_name` and `classe` were loaded as
-character type and need to be converted. Also, beginning at column 12 some
-numeric variables were loaded as character type and also need conversion. It can
-also be seen that many of these values are simply blank spaces. A function was
-created to do the type conversions and easily repeat it later on the validation
-and test sets. When the blank spaces are converted to numeric it introduces NAs
-by coercion and these warnings are suppressed in the function.
+In the next code chunk a portion of the data are previewed with `str()`, and it
+can be seen that some factor variables like `user_name` and `classe` were loaded
+as character type and need to be converted. Also, beginning at column 12 some
+numeric variables were loaded as character type, and these also need conversion.
+It can also be seen that many of these values are simply blank. A function was
+created to do the type conversions and easily repeat them later on the
+validation and test sets. When the blanks are converted to numeric it introduces
+`NA`s by coercion and these warnings are suppressed in the function.
 
 ```{r exploring}
 
 # Check out the data
 str(train.subset[1:15])
 # Convert some character columns to factor and some to numeric
-train.subset <- ConvertDataTypes(train.subset)  # 17662 obs of 160 variables
+train.subset <- ConvertWLE(train.subset)  # 17662 obs of 160 variables
 # Check the data again
-summary(train.subset[1:15])  # Some columns have NAs
+summary(train.subset[6:12])  # Some columns have NAs
 # Check for NA values
 na.fractions <- train.subset %>%
   map_dbl(function(x) {mean(is.na(x))}) %>%  # Calc. NA fraction of each column
@@ -137,14 +134,14 @@ summary(na.fractions)  # Min. = 0.9796, Max. = 1.0000
 
 After checking the results of `summary()` it can be seen that some of the
 variables contain large fractions of `NA` values. Of the 160 original variables
-in the data, 100 of them contain NA values, and the fraction of `NA`s in each
-these columns is over 97%. By reading the research paper, one can find that the
-authors defined "windows" of data (several sequential observations) and
+in the data, 100 of them contain `NA` values, and the fraction of `NA`s in each
+of these columns is over 97%. By reading the research paper, one can find that
+the authors defined blocks of sequential observations as "windows" of data and
 calculated features for the window. These window level summaries represent a
 second type of data but are stored alongside the measurement data.
 
 Before proceeding it should be determined which type of data should be used as
-the basis for prediction. By checking the test data set it can be seen that
+the basis for prediction. By viewing the test data set it can be seen that
 individual data points are provided (not window summaries). Since the prediction
 model will not be based on window summary data, the variables that contain only
 this data can be excluded.
@@ -161,13 +158,12 @@ train.subset <- select(train.subset, c(-1, -(3:7)))  # 17622 obs of 54 variables
 ```
 
 After removing the 100 summary columns, the data were in tidy format, but still
-possibly contained variables that would cause problems or unnecessary
-complication in the model fitting step. The remaining variables were assessed,
-and it was determined that six columns could be removed from the training data.
-Additional detail on the justification for these eliminations can be found in
-the script for this project in the [GitHub repo][2]. As the unneeded variables
-were removed in the chunk above, the data are in tidy format and ready for model
-fitting.
+contained variables that could cause problems or unnecessary complication in the
+model fitting step. The remaining variables were assessed, and it was determined
+that six columns could be removed from the training data. Additional detail on
+the justification for these eliminations can be found in the script for this
+project in the [GitHub repo][2]. Once the unneeded variables were removed in the
+chunk above, the data were in tidy format and ready for model fitting.
 
 
 ## Part 3) Model Fitting
@@ -207,7 +203,7 @@ training data. The model is then used to predict on the validation data.
 ```{r validating}
 
 validation.data <- validation.data %>%  # 1960 obs. of 160 variables
-  ConvertDataTypes() %>% # 1960 obs. of 160 variables
+  ConvertWLE() %>% # 1960 obs. of 160 variables
   SubsetWLE()  # 1960 obs. of 54 variables
 
 # Predict on validation data and check performance
@@ -228,9 +224,9 @@ training and validation data, the model is ready to be used on the test data.
 
 ## Part 5) Predicting on Test Set
 
-In the final code chunk below, the testing data downloaded and then processed in
-the same way as the training data. The model is then used to predict on the test
-data, and the prediction results are shown below.
+In the final code chunk below, the testing data were downloaded and then
+processed in the same way as the training data. The model was then used to
+predict on the test data, and the prediction results are shown below.
 
 ```{r predicting}
 
@@ -246,7 +242,7 @@ if (!file.exists(testing.file)) {
 raw.test.data <- read.csv(testing.file, stringsAsFactors = F)  # 20 obs. of 160
 # Process the testing data the same as before
 test.data <- raw.test.data %>%  # 20 obs. of 160 variables
-  ConvertDataTypes() %>% # 20 obs. of 160 variables
+  ConvertWLE() %>% # 20 obs. of 160 variables
   SubsetWLE()  # 20 obs. of 54 variables
 rm(na.columns, testing.file)
 
